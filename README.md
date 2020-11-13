@@ -3,6 +3,8 @@ SVG Paths to array of points - https://shinao.github.io/PathToPoints/
 
 Extract points from SVG paths or generate them from a text.
 
+This project was forked from https://github.com/Shinao/PathToPoints and slightly modified to ouput point coordinates compatibe with R. All the credit goes to that project.
+
 ### Preview
 ![Preview](/docs/preview_path_to_points.gif)
 
