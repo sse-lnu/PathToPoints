@@ -206,6 +206,14 @@ function getInfosFromPaths(paths) {
     return paths_info;
 }
 
+const nextColor = (() => {
+	let count = 0
+	, colors = ["gold", "brown", "blue", "green", "indigo", "coral", "orange", "orangered", "black", "aqua", "magenta"];
+	return () => {
+		return colors[(count++ % colors.length)];
+	};
+})();
+
 function generatePointsFromSvg() {
     paper.clear();
     $('.bellows').remove();
@@ -220,9 +228,10 @@ function generatePointsFromSvg() {
     // Read each paths from svg
     var paths_info = getInfosFromPaths(paths);
     var offset_path_x = (paths_info.x * paths_info.scale * -1) + (paper.canvas.clientWidth / 2) - (paths_info.width * paths_info.scale / 2);
-    var offset_path_y = (paths_info.y * paths_info.scale * -1) + (paper.canvas.clientHeight / 2) - (paths_info.height * paths_info.scale / 2);
+		var offset_path_y = (paths_info.y * paths_info.scale * -1) + (paper.canvas.clientHeight / 2) - (paths_info.height * paths_info.scale / 2);
+		/** @type {Object<string, Array<{x: Number, y: Number}>>} */
+		const all_points_obj = {};
     var all_points = "";
-    var all_points_count = 0;
     for (var i = 0; i < paths.length; ++i) {
         var path = $($(paths).get(i)).attr('d').replace(' ', ',');
 
@@ -230,43 +239,117 @@ function generatePointsFromSvg() {
 				const data_points_r = [];
 
 				// get points at regular intervals
-        var color = randomColor();
+        var color = nextColor();
         var c;
         for (c = 0; c < Raphael.getTotalLength(path); c += step_point) {
             var point = Raphael.getPointAtLength(path, c);
 
 						data_points_r.push({ x: point.x, y: point.y });
-            var circle = paper.circle(point.x * paths_info.scale, point.y * paths_info.scale, 2)
+						paper.circle(point.x * paths_info.scale, point.y * paths_info.scale, 2)
                 .attr("fill", color)
                 .attr("stroke", "none")
                 .transform("T" + offset_path_x * paths_info.scale + "," + offset_path_y * paths_info.scale);
 				}
-				
-				const data_points_r_converted =
-					`x <- c(${data_points_r.map(p => p.x).join(',')})&#13;&#13;y <- c(${data_points_r.map(p => p.y).join(',')})`;
 
-				all_points_count += c;
-				all_points += data_points_r_converted;
-				addBelow("Path " + i, color, data_points_r_converted, c / step_point);
+
+				all_points_obj[color] = data_points_r;
+
+				const temp = {};
+				temp[color] = data_points_r;
+				addBelow("Path " + i, color, temp);
     }
 
-    addBelow("All Paths", "#2A2A2A", all_points, all_points_count / step_point);
+    addBelow("All Paths", nextColor(), all_points_obj);
     
     $('.bellows').bellows();
     hideHoldOnOverlay();
 }
 
-function addBelow(name, color, data, nb_pts) {
-      var below = "";
-      
-      below += "<div class='bellows__item'><div class='bellows__header' style='background-color:" + color + "'>";
-      below += name ;
-      below += "<span>" + nb_pts + " pts</span>";
-      below += "</div><div class='bellows__content'>";
-      below += "<textarea rows='10' cols='50'>" + data + "</textarea></div></div>";
+const xyPathToR = (xyData, prefix = void 0) => `${prefix ? `${prefix}_` : ''}x <- c(${xyData.map(p => p.x).join(',')})&#13;&#13;${prefix ? `${prefix}_` : ''}y <- c(${xyData.map(p => p.y).join(',')})`;
 
-      $('.bellows').append(below);
-  }
+/**
+ * @param {Object<string, Array<{x: Number, y: ArrayNumber}>>} data
+ */
+const downloadAsCsv = (filename, data) => {
+	const k = Object.keys(data)
+	, numRows = data[k[0]].length
+	, rows = [...Array(numRows + 1)].map(() => []);
+	
+	const set = new Set(k.map(key => data[key].length));
+	if (set.size > 1) {
+		if (!confirm('The series have different lengths, be careful with the resulting CSV! Filling with blanks.')) {
+			return;
+		}
+	}
+
+	// append header:
+	k.forEach(key => {
+		rows[0].push(`${key}_x`, `${key}_y`);
+	});
+
+	// fill rows:
+	for (let i = 0; i < numRows; i++) {
+		k.forEach(key => {
+			if (i >= data[key].length) {
+				rows[i + 1].push('', '');
+			} else {
+				rows[i + 1].push(data[key][i].x);
+				rows[i + 1].push(data[key][i].y);
+			}
+		});
+	}
+
+	// Let's join it all together
+	const text = rows.map(r => r.join(';')).join('\n');
+
+	var pom = document.createElement('a');
+	pom.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(text));
+	pom.setAttribute('download', `${filename}.csv`);
+
+	if (document.createEvent) {
+		var event = document.createEvent('MouseEvents');
+		event.initEvent('click', true, true);
+		pom.dispatchEvent(event);
+	}
+	else {
+		pom.click();
+	}
+};
+
+/**
+ * @param {Object<string, Array<{x: Number, y: Number}>>} data
+ */
+function addBelow(name, color, data) {
+	const nb_pts = Object.keys(data).map(pathName => data[pathName].length).reduce((a, b) => a + b, 0);
+
+	const dataAsR = Object.keys(data).map(pathName => {
+		return xyPathToR(data[pathName], pathName);
+	}).join('&#13;&#13;');
+
+	$('.bellows').append($('<div/>')
+		.addClass('bellows__item')
+		.append($('<div/>')
+			.addClass('bellows__header')
+			.attr('style', `background-color: ${color}`)
+			.text(name)
+			.append($('<span/>').text(`${nb_pts} pts`))
+		).append($('<div/>')
+			.addClass('bellows__content')
+			.append($('<textarea/>')
+				.attr('rows', 10)
+				.attr('cols', 50)
+				.val(dataAsR)
+			).append($('<div/>')
+				.append($('<button/>')
+					.text('Download as CSV')
+					.on('click', jqEvt => {
+						downloadAsCsv(name, data);
+					})
+				)
+			)
+		)
+	);
+}
 
 // Hacky function to manage "fake" drop from image title
 function manageDropFromTitle(evt) {
