@@ -272,15 +272,15 @@ const xyPathToR = (xyData, prefix = void 0) => `${prefix ? `${prefix}_` : ''}x <
  */
 const downloadAsCsv = (filename, data) => {
 	const k = Object.keys(data)
-	, numRows = data[k[0]].length
-	, rows = [...Array(numRows + 1)].map(() => []);
-	
-	const set = new Set(k.map(key => data[key].length));
+	, set = new Set(k.map(key => data[key].length));
 	if (set.size > 1) {
 		if (!confirm('The series have different lengths, be careful with the resulting CSV! Filling with blanks.')) {
 			return;
 		}
 	}
+
+	const numRows = Math.max(...set) // must be the supremum so no one is cut off
+	, rows = [...Array(numRows + 1)].map(() => [])
 
 	// append header:
 	k.forEach(key => {
