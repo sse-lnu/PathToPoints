@@ -1,5 +1,5 @@
 // All properties needed
-var step_point = 10;
+var step_point = 1;
 var current_svg_xml = "";
 var current_svg_width = 0;
 var current_svg_height = 0;
