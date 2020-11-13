@@ -226,23 +226,28 @@ function generatePointsFromSvg() {
     for (var i = 0; i < paths.length; ++i) {
         var path = $($(paths).get(i)).attr('d').replace(' ', ',');
 
-        // get points at regular intervals
-        var data_points = "";
+				// Let's generate points for usage in R!
+				const data_points_r = [];
+
+				// get points at regular intervals
         var color = randomColor();
         var c;
         for (c = 0; c < Raphael.getTotalLength(path); c += step_point) {
             var point = Raphael.getPointAtLength(path, c);
 
-            data_points += point.x + "," + point.y + "&#13;";
+						data_points_r.push({ x: point.x, y: point.y });
             var circle = paper.circle(point.x * paths_info.scale, point.y * paths_info.scale, 2)
                 .attr("fill", color)
                 .attr("stroke", "none")
                 .transform("T" + offset_path_x * paths_info.scale + "," + offset_path_y * paths_info.scale);
-        }
+				}
+				
+				const data_points_r_converted =
+					`x <- c(${data_points_r.map(p => p.x).join(',')})&#13;&#13;y <- c(${data_points_r.map(p => p.y).join(',')})`;
 
-        all_points_count += c;
-        all_points += data_points + "#&#13;";
-        addBelow("Path " + i, color, data_points, c / step_point);
+				all_points_count += c;
+				all_points += data_points_r_converted;
+				addBelow("Path " + i, color, data_points_r_converted, c / step_point);
     }
 
     addBelow("All Paths", "#2A2A2A", all_points, all_points_count / step_point);
